@@ -5,7 +5,7 @@ from PIL import Image
 
 _model = None
 MODEL_REPO = "turhancan97/yolov8-segment-trash-detection"
-MODEL_FILE = "best.pt"
+MODEL_FILE = "yolov8m-seg.pt"
 
 
 def get_model() -> YOLO:
