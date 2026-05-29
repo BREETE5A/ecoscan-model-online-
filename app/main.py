@@ -38,6 +38,12 @@ def health():
     return {"status": "healthy"}
 
 
+@app.get("/classes")
+def classes():
+    model = get_model()
+    return {"classes": model.names}
+
+
 @app.post("/scan")
 async def scan(file: UploadFile = File(...)):
     if not file.content_type.startswith("image/"):
