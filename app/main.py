@@ -1,18 +1,15 @@
-import os
 import io
-import base64
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from PIL import Image
-import numpy as np
 
-from app.model import get_model, run_inference
+from app.model import run_inference, ROBOFLOW_MODEL_ID
 
 app = FastAPI(
     title="EcoScan Scan API",
-    description="API de détection de déchets YOLOv8",
-    version="1.0.0"
+    description="API de détection de déchets — Roboflow YOLOv8",
+    version="2.0.0"
 )
 
 app.add_middleware(
@@ -23,25 +20,14 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
-async def startup():
-    get_model()
-
-
 @app.get("/")
 def root():
-    return {"message": "EcoScan Scan API fonctionne correctement."}
+    return {"message": "EcoScan Scan API — Roboflow", "model": ROBOFLOW_MODEL_ID}
 
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
-
-
-@app.get("/classes")
-def classes():
-    model = get_model()
-    return {"classes": model.names}
+    return {"status": "healthy", "model": ROBOFLOW_MODEL_ID}
 
 
 @app.post("/scan")

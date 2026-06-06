@@ -1,7 +1,5 @@
 fastapi
 uvicorn[standard]
 python-multipart
-ultralytics
-huggingface_hub
+inference-sdk
 Pillow
-numpy
