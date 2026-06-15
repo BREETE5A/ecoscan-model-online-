@@ -4,12 +4,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from PIL import Image
 
-from app.model import run_inference, ROBOFLOW_MODEL_ID
+from app.model import run_inference, CLAUDE_MODEL
 
 app = FastAPI(
     title="EcoScan Scan API",
-    description="API de détection de déchets — Roboflow YOLOv8",
-    version="2.0.0"
+    description="API de détection de déchets — Claude Vision",
+    version="3.0.0"
 )
 
 app.add_middleware(
@@ -22,12 +22,12 @@ app.add_middleware(
 
 @app.get("/")
 def root():
-    return {"message": "EcoScan Scan API — Roboflow", "model": ROBOFLOW_MODEL_ID}
+    return {"message": "EcoScan Scan API — Claude Vision", "model": CLAUDE_MODEL}
 
 
 @app.get("/health")
 def health():
-    return {"status": "healthy", "model": ROBOFLOW_MODEL_ID}
+    return {"status": "healthy", "model": CLAUDE_MODEL}
 
 
 @app.post("/scan")

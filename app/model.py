@@ -1,48 +1,78 @@
 import os
 import io
-from inference_sdk import InferenceHTTPClient
+import json
+import base64
+import anthropic
 from PIL import Image
 
-ROBOFLOW_API_KEY  = os.environ.get("ROBOFLOW_API_KEY", "")
-ROBOFLOW_API_URL  = "https://serverless.roboflow.com"
-ROBOFLOW_MODEL_ID = "yolov8-trash-detections-kgnug/11"
-CONFIDENCE        = 0.25
+CLAUDE_MODEL = "claude-haiku-4-5"
 
-_client = InferenceHTTPClient(
-    api_url=ROBOFLOW_API_URL,
-    api_key=ROBOFLOW_API_KEY,
-)
+_client: anthropic.Anthropic | None = None
+
+VALID_LABELS = {"plastique", "verre", "metal", "cardboard", "paper", "organique", "electronique", "trash"}
+
+PROMPT = """Analyze this image and classify the waste item visible.
+
+Respond with ONLY a valid JSON object, no explanation, no markdown:
+{"label": "plastique", "confidence": 0.92}
+
+The label must be exactly one of:
+- "plastique"    -> plastic bottles, bags, containers, cups, straws, foam
+- "verre"        -> glass bottles, jars, broken glass
+- "metal"        -> cans, aluminum foil, bottle caps, scrap metal
+- "cardboard"    -> cardboard boxes, egg cartons, drink cartons
+- "paper"        -> newspapers, magazines, tissues, paper bags
+- "organique"    -> food waste, organic matter
+- "electronique" -> batteries, cables, electronics
+- "trash"        -> non-recyclable or unidentifiable waste
+
+Confidence must be a float between 0.0 and 1.0."""
+
+
+def _get_client() -> anthropic.Anthropic:
+    global _client
+    if _client is None:
+        _client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+    return _client
 
 
 def run_inference(image: Image.Image) -> dict:
     buf = io.BytesIO()
     image.save(buf, format="JPEG", quality=90)
     buf.seek(0)
+    image_b64 = base64.b64encode(buf.read()).decode("utf-8")
 
-    result = _client.infer(buf, model_id=ROBOFLOW_MODEL_ID)
+    response = _get_client().messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=256,
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/jpeg",
+                        "data": image_b64,
+                    },
+                },
+                {"type": "text", "text": PROMPT},
+            ],
+        }],
+    )
 
-    detections = []
-    for p in result.get("predictions", []):
-        conf = float(p["confidence"])
-        if conf < CONFIDENCE:
-            continue
-        w, h, cx, cy = p["width"], p["height"], p["x"], p["y"]
-        detections.append({
-            "label":      p["class"],
-            "confidence": round(conf, 3),
-            "box": {
-                "x1": round(cx - w / 2),
-                "y1": round(cy - h / 2),
-                "x2": round(cx + w / 2),
-                "y2": round(cy + h / 2),
-            },
-        })
+    text = response.content[0].text.strip()
+    data = json.loads(text)
 
-    detections.sort(key=lambda d: d["confidence"], reverse=True)
+    label = data.get("label", "trash")
+    if label not in VALID_LABELS:
+        label = "trash"
+    confidence = max(0.0, min(1.0, float(data.get("confidence", 0.5))))
+
     return {
-        "detections":     detections,
-        "count":          len(detections),
-        "top_label":      detections[0]["label"]      if detections else None,
-        "top_confidence": detections[0]["confidence"] if detections else None,
-        "source":         "roboflow",
+        "detections": [{"label": label, "confidence": round(confidence, 3)}],
+        "count": 1,
+        "top_label": label,
+        "top_confidence": round(confidence, 3),
+        "source": "claude",
     }
