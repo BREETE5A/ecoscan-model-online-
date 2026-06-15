@@ -2,12 +2,10 @@ import os
 import io
 import json
 import base64
-import anthropic
+import google.generativeai as genai
 from PIL import Image
 
-CLAUDE_MODEL = "claude-haiku-4-5"
-
-_client: anthropic.Anthropic | None = None
+GEMINI_MODEL = "gemini-2.0-flash"
 
 VALID_LABELS = {"plastique", "verre", "metal", "cardboard", "paper", "organique", "electronique", "trash"}
 
@@ -28,40 +26,31 @@ The label must be exactly one of:
 
 Confidence must be a float between 0.0 and 1.0."""
 
+_model = None
 
-def _get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
-    return _client
+
+def _get_model():
+    global _model
+    if _model is None:
+        genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
+        _model = genai.GenerativeModel(GEMINI_MODEL)
+    return _model
 
 
 def run_inference(image: Image.Image) -> dict:
     buf = io.BytesIO()
     image.save(buf, format="JPEG", quality=90)
     buf.seek(0)
-    image_b64 = base64.b64encode(buf.read()).decode("utf-8")
 
-    response = _get_client().messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=256,
-        messages=[{
-            "role": "user",
-            "content": [
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/jpeg",
-                        "data": image_b64,
-                    },
-                },
-                {"type": "text", "text": PROMPT},
-            ],
-        }],
-    )
+    response = _get_model().generate_content([PROMPT, Image.open(buf)])
 
-    text = response.content[0].text.strip()
+    text = response.text.strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+    text = text.strip()
+
     data = json.loads(text)
 
     label = data.get("label", "trash")
@@ -74,5 +63,5 @@ def run_inference(image: Image.Image) -> dict:
         "count": 1,
         "top_label": label,
         "top_confidence": round(confidence, 3),
-        "source": "claude",
+        "source": "gemini",
     }
