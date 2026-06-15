@@ -7,7 +7,7 @@ from PIL import Image
 
 GEMINI_MODEL = "gemini-2.0-flash"
 
-VALID_LABELS = {"plastique", "verre", "metal", "cardboard", "paper", "organique", "electronique", "trash"}
+VALID_LABELS = {"plastique", "verre", "metal", "cardboard", "paper", "organique", "electronique", "textile", "dangereux", "bois", "trash"}
 
 PROMPT = """Analyze this image and classify the waste item visible.
 
@@ -21,7 +21,10 @@ The label must be exactly one of:
 - "cardboard"    -> cardboard boxes, egg cartons, drink cartons
 - "paper"        -> newspapers, magazines, tissues, paper bags
 - "organique"    -> food waste, organic matter
-- "electronique" -> batteries, cables, electronics
+- "electronique" -> batteries, cables, electronic devices, chargers
+- "textile"      -> clothing, shoes, fabric, bags, curtains, bedding
+- "dangereux"    -> paint, chemicals, motor oil, medications, syringes, pesticides
+- "bois"         -> wood furniture, planks, pallets, branches
 - "trash"        -> non-recyclable or unidentifiable waste
 
 Confidence must be a float between 0.0 and 1.0."""
