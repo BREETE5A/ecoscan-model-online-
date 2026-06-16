@@ -9,25 +9,30 @@ CLAUDE_MODEL = "claude-haiku-4-5"
 
 VALID_LABELS = {"plastique", "verre", "metal", "cardboard", "paper", "organique", "electronique", "textile", "dangereux", "bois", "trash"}
 
-PROMPT = """Analyze this image and classify the waste item visible.
+PROMPT = """Analysez cette image et identifiez TOUTES les composantes distinctes visibles (corps, bouchon, étiquette, couvercle, emballage, etc.).
 
-Respond with ONLY a valid JSON object, no explanation, no markdown:
-{"label": "plastique", "confidence": 0.92}
+Répondez avec UNIQUEMENT un objet JSON valide, sans explication ni markdown :
+{"components": [{"partie": "Corps", "label": "verre", "confidence": 0.95}, {"partie": "Bouchon", "label": "metal", "confidence": 0.88}]}
 
-The label must be exactly one of:
-- "plastique"    -> plastic bottles, bags, containers, cups, straws, foam
-- "verre"        -> glass bottles, jars, broken glass
-- "metal"        -> cans, aluminum foil, bottle caps, scrap metal
-- "cardboard"    -> cardboard boxes, egg cartons, drink cartons
-- "paper"        -> newspapers, magazines, tissues, paper bags
-- "organique"    -> food waste, organic matter
-- "electronique" -> batteries, cables, electronic devices, chargers
-- "textile"      -> clothing, shoes, fabric, bags, curtains, bedding
-- "dangereux"    -> paint, chemicals, motor oil, medications, syringes, pesticides
-- "bois"         -> wood furniture, planks, pallets, branches
-- "trash"        -> non-recyclable or unidentifiable waste
+Règles :
+- Listez chaque composante séparément si elle est d'une matière différente
+- Si l'objet est d'une seule matière, retournez une seule composante
+- Le nom de la "partie" doit être en français (Corps, Bouchon, Étiquette, Couvercle, Emballage, Fond, etc.)
+- Le "label" doit être exactement l'un de :
+  "plastique"    -> bouteilles, sacs, gobelets, pailles, mousse plastique
+  "verre"        -> bouteilles en verre, bocaux, verre cassé
+  "metal"        -> canettes, papier alu, capsules, couvercles métal
+  "cardboard"    -> cartons, boîtes en carton, briques alimentaires
+  "paper"        -> journaux, mouchoirs, sacs en papier, magazines
+  "organique"    -> déchets alimentaires, matière organique
+  "electronique" -> piles, câbles, appareils électroniques, chargeurs
+  "textile"      -> vêtements, chaussures, tissu, rideaux, literie
+  "dangereux"    -> peinture, produits chimiques, médicaments, seringues
+  "bois"         -> meubles en bois, planches, palettes, branches
+  "trash"        -> déchet non recyclable ou non identifiable
+- confidence doit être un float entre 0.0 et 1.0
+- Ordonnez les composantes par confidence décroissante"""
 
-Confidence must be a float between 0.0 and 1.0."""
 
 _client: anthropic.Anthropic | None = None
 
@@ -39,6 +44,15 @@ def _get_client() -> anthropic.Anthropic:
     return _client
 
 
+def _clean_json(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+    return text.strip()
+
+
 def run_inference(image: Image.Image) -> dict:
     buf = io.BytesIO()
     image.save(buf, format="JPEG", quality=90)
@@ -46,7 +60,7 @@ def run_inference(image: Image.Image) -> dict:
 
     response = _get_client().messages.create(
         model=CLAUDE_MODEL,
-        max_tokens=256,
+        max_tokens=512,
         messages=[{
             "role": "user",
             "content": [
@@ -63,23 +77,30 @@ def run_inference(image: Image.Image) -> dict:
         }],
     )
 
-    text = response.content[0].text.strip()
-    if text.startswith("```"):
-        text = text.split("```")[1]
-        if text.startswith("json"):
-            text = text[4:]
-    text = text.strip()
+    data = json.loads(_clean_json(response.content[0].text))
+    raw_components = data.get("components", [])
 
-    data = json.loads(text)
-    label = data.get("label", "trash")
-    if label not in VALID_LABELS:
-        label = "trash"
-    confidence = max(0.0, min(1.0, float(data.get("confidence", 0.5))))
+    components = []
+    for c in raw_components:
+        label = c.get("label", "trash")
+        if label not in VALID_LABELS:
+            label = "trash"
+        confidence = max(0.0, min(1.0, float(c.get("confidence", 0.5))))
+        components.append({
+            "partie": c.get("partie", "Objet"),
+            "label": label,
+            "confidence": round(confidence, 3),
+        })
 
+    if not components:
+        components = [{"partie": "Objet", "label": "trash", "confidence": 0.5}]
+
+    top = components[0]
     return {
-        "detections": [{"label": label, "confidence": round(confidence, 3)}],
-        "count": 1,
-        "top_label": label,
-        "top_confidence": round(confidence, 3),
+        "components": components,
+        "detections": [{"label": c["label"], "confidence": c["confidence"]} for c in components],
+        "count": len(components),
+        "top_label": top["label"],
+        "top_confidence": top["confidence"],
         "source": "claude",
     }
