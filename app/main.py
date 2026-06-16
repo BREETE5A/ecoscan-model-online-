@@ -4,12 +4,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from PIL import Image
 
-from app.model import run_inference, GEMINI_MODEL
+from app.model import run_inference, CLAUDE_MODEL
 
 app = FastAPI(
     title="EcoScan Scan API",
-    description="API de détection de déchets — Gemini Vision",
-    version="3.0.0"
+    description="API de détection de déchets — Claude Vision",
+    version="4.0.0"
 )
 
 app.add_middleware(
@@ -22,12 +22,12 @@ app.add_middleware(
 
 @app.get("/")
 def root():
-    return {"message": "EcoScan Scan API — Gemini Vision", "model": GEMINI_MODEL}
+    return {"message": "EcoScan Scan API — Claude Vision", "model": CLAUDE_MODEL}
 
 
 @app.get("/health")
 def health():
-    return {"status": "healthy", "model": GEMINI_MODEL}
+    return {"status": "healthy", "model": CLAUDE_MODEL}
 
 
 @app.post("/scan")

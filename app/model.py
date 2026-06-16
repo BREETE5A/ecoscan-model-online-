@@ -2,11 +2,10 @@ import os
 import io
 import json
 import base64
-import requests
+import anthropic
 from PIL import Image
 
-GEMINI_MODEL = "gemini-1.5-flash-latest"
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+CLAUDE_MODEL = "claude-haiku-4-5"
 
 VALID_LABELS = {"plastique", "verre", "metal", "cardboard", "paper", "organique", "electronique", "textile", "dangereux", "bois", "trash"}
 
@@ -30,31 +29,41 @@ The label must be exactly one of:
 
 Confidence must be a float between 0.0 and 1.0."""
 
+_client: anthropic.Anthropic | None = None
+
+
+def _get_client() -> anthropic.Anthropic:
+    global _client
+    if _client is None:
+        _client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+    return _client
+
 
 def run_inference(image: Image.Image) -> dict:
     buf = io.BytesIO()
     image.save(buf, format="JPEG", quality=90)
     image_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
 
-    api_key = os.environ.get("GEMINI_API_KEY", "")
-    payload = {
-        "contents": [{
-            "parts": [
-                {"text": PROMPT},
-                {"inline_data": {"mime_type": "image/jpeg", "data": image_b64}},
-            ]
-        }]
-    }
-
-    response = requests.post(
-        GEMINI_URL,
-        params={"key": api_key},
-        json=payload,
-        timeout=30,
+    response = _get_client().messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=256,
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/jpeg",
+                        "data": image_b64,
+                    },
+                },
+                {"type": "text", "text": PROMPT},
+            ],
+        }],
     )
-    response.raise_for_status()
 
-    text = response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+    text = response.content[0].text.strip()
     if text.startswith("```"):
         text = text.split("```")[1]
         if text.startswith("json"):
@@ -72,5 +81,5 @@ def run_inference(image: Image.Image) -> dict:
         "count": 1,
         "top_label": label,
         "top_confidence": round(confidence, 3),
-        "source": "gemini",
+        "source": "claude",
     }
