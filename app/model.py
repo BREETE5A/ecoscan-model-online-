@@ -12,7 +12,7 @@ VALID_LABELS = {"plastique", "verre", "metal", "cardboard", "paper", "organique"
 PROMPT = """Analysez cette image et identifiez TOUTES les composantes distinctes visibles (corps, bouchon, étiquette, couvercle, emballage, etc.).
 
 Répondez avec UNIQUEMENT un objet JSON valide, sans explication ni markdown :
-{"components": [{"partie": "Corps", "label": "verre", "confidence": 0.95}, {"partie": "Bouchon", "label": "metal", "confidence": 0.88}]}
+{"components": [{"partie": "Corps", "label": "verre", "confidence": 0.95, "conseil": "Rincez avant de déposer dans la colonne verte."}, {"partie": "Bouchon", "label": "metal", "confidence": 0.88, "conseil": "Retirez le bouchon et mettez-le dans le bac jaune."}]}
 
 Règles :
 - Listez chaque composante séparément si elle est d'une matière différente
@@ -30,6 +30,7 @@ Règles :
   "dangereux"    -> peinture, produits chimiques, médicaments, seringues
   "bois"         -> meubles en bois, planches, palettes, branches
   "trash"        -> déchet non recyclable ou non identifiable
+- "conseil" : conseil pratique court en français pour aider l'utilisateur à bien trier cette composante
 - confidence doit être un float entre 0.0 et 1.0
 - Ordonnez les composantes par confidence décroissante"""
 
@@ -90,6 +91,7 @@ def run_inference(image: Image.Image) -> dict:
             "partie": c.get("partie", "Objet"),
             "label": label,
             "confidence": round(confidence, 3),
+            "conseil": c.get("conseil", ""),
         })
 
     if not components:
