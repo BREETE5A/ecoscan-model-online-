@@ -5,7 +5,7 @@ import base64
 import google.generativeai as genai
 from PIL import Image
 
-GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_MODEL = "gemini-1.5-flash"
 
 VALID_LABELS = {"plastique", "verre", "metal", "cardboard", "paper", "organique", "electronique", "textile", "dangereux", "bois", "trash"}
 
