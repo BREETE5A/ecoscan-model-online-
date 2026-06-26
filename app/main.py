@@ -31,12 +31,12 @@ def health():
 
 
 @app.post("/scan")
-async def scan(file: UploadFile = File(...)):
+async def scan(file: UploadFile = File(...), lang: str = "fr"):
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Le fichier doit être une image.")
 
     contents = await file.read()
     image = Image.open(io.BytesIO(contents)).convert("RGB")
 
-    results = run_inference(image)
+    results = run_inference(image, lang=lang)
     return JSONResponse(content=results)

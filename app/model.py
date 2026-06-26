@@ -9,15 +9,32 @@ CLAUDE_MODEL = "claude-haiku-4-5"
 
 VALID_LABELS = {"plastique", "verre", "metal", "cardboard", "paper", "organique", "electronique", "textile", "dangereux", "bois", "trash"}
 
-PROMPT = """Analysez cette image et identifiez TOUTES les composantes distinctes visibles (corps, bouchon, étiquette, couvercle, emballage, etc.).
+CONSEIL_LANG = {
+    "fr": "conseil pratique court en français",
+    "en": "short practical tip in English",
+    "ar": "نصيحة عملية قصيرة باللغة العربية",
+    "es": "consejo práctico corto en español",
+}
+
+PARTIE_LANG = {
+    "fr": "en français (Corps, Bouchon, Étiquette, Couvercle, Emballage, Fond, etc.)",
+    "en": "in English (Body, Cap, Label, Lid, Packaging, Bottom, etc.)",
+    "ar": "باللغة العربية (الجسم، الغطاء، الملصق، الغطاء العلوي، العبوة، إلخ)",
+    "es": "en español (Cuerpo, Tapón, Etiqueta, Tapa, Embalaje, Fondo, etc.)",
+}
+
+def _build_prompt(lang: str = "fr") -> str:
+    conseil_instr = CONSEIL_LANG.get(lang, CONSEIL_LANG["fr"])
+    partie_instr  = PARTIE_LANG.get(lang, PARTIE_LANG["fr"])
+    return f"""Analysez cette image et identifiez TOUTES les composantes distinctes visibles (corps, bouchon, étiquette, couvercle, emballage, etc.).
 
 Répondez avec UNIQUEMENT un objet JSON valide, sans explication ni markdown :
-{"components": [{"partie": "Corps", "label": "verre", "confidence": 0.95, "conseil": "Rincez avant de déposer dans la colonne verte."}, {"partie": "Bouchon", "label": "metal", "confidence": 0.88, "conseil": "Retirez le bouchon et mettez-le dans le bac jaune."}]}
+{{"components": [{{"partie": "Corps", "label": "verre", "confidence": 0.95, "conseil": "Rincez avant de déposer dans la colonne verte."}}, {{"partie": "Bouchon", "label": "metal", "confidence": 0.88, "conseil": "Retirez le bouchon et mettez-le dans le bac jaune."}}]}}
 
 Règles :
 - Listez chaque composante séparément si elle est d'une matière différente
 - Si l'objet est d'une seule matière, retournez une seule composante
-- Le nom de la "partie" doit être en français (Corps, Bouchon, Étiquette, Couvercle, Emballage, Fond, etc.)
+- Le nom de la "partie" doit être {partie_instr}
 - Le "label" doit être exactement l'un de :
   "plastique"    -> bouteilles, sacs, gobelets, pailles, mousse plastique
   "verre"        -> bouteilles en verre, bocaux, verre cassé
@@ -30,7 +47,7 @@ Règles :
   "dangereux"    -> peinture, produits chimiques, médicaments, seringues
   "bois"         -> meubles en bois, planches, palettes, branches
   "trash"        -> déchet non recyclable ou non identifiable
-- "conseil" : conseil pratique court en français pour aider l'utilisateur à bien trier cette composante
+- "conseil" : {conseil_instr} pour aider l'utilisateur à bien trier cette composante
 - confidence doit être un float entre 0.0 et 1.0
 - Ordonnez les composantes par confidence décroissante"""
 
@@ -54,11 +71,12 @@ def _clean_json(text: str) -> str:
     return text.strip()
 
 
-def run_inference(image: Image.Image) -> dict:
+def run_inference(image: Image.Image, lang: str = "fr") -> dict:
     buf = io.BytesIO()
     image.save(buf, format="JPEG", quality=90)
     image_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
 
+    prompt = _build_prompt(lang)
     response = _get_client().messages.create(
         model=CLAUDE_MODEL,
         max_tokens=512,
@@ -73,7 +91,7 @@ def run_inference(image: Image.Image) -> dict:
                         "data": image_b64,
                     },
                 },
-                {"type": "text", "text": PROMPT},
+                {"type": "text", "text": prompt},
             ],
         }],
     )
